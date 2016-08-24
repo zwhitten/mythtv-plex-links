@@ -9,19 +9,16 @@
 #
 # Set this to the directory of the Plex Library where myth recording symlinks
 # should reside.
-PLEXLIBRARYDIR="/mnt/esata/recordedtv"
-# Set this to the URL prefix of your Plex Media Server
-PMSURL="http://192.168.1.20:32400"
-# Set this to the section number of your recorded TV shows library. To find
-# this out, go to your plex media server and navigate to the desired library.
-# Look at the URL for that page, and at the end you should see
-# /section/<number>. The number here is your section number.
-PMSSEC="6"
+PLEXLIBRARYDIR="/media/Storage2/recordings/Episodes"
+
 # Set this to the location of the mythtv config.xml file. It's needed to
 # determine the mysql login. If you're running mythbuntu, you shouldn't need to
 # change this.
 # TODO: sanity check file and db values
 CONFIGXML="/home/mythtv/.mythtv/config.xml"
+
+#Backup directory to move original recording
+BACKUP_DIR="/tmp/media_backup"
 
 # Leave everything below this line alone unless you know what you're doing.
 #
@@ -66,17 +63,26 @@ SGDIR=$(mysql mythconverg --user=$DBUSER --password=$DBPASS -se \
   "SELECT dirname FROM storagegroup WHERE groupname=\"$STORAGEGROUP\";")
 
 MYTHFILE="$SGDIR/$FILENAME"
-PLEXFILE="$TITLE - s${SEASON}e${EPISODE} - $STARTTIME.mpg"
+PLEXFILE="$TITLE - s${SEASON}e${EPISODE} - $STARTTIME.mp4"
 PLEXSHOWDIR="$PLEXLIBRARYDIR/$TITLE/Season ${SEASON}"
 PLEXFILEPATH="$PLEXSHOWDIR/$PLEXFILE"
 
 # create plex library subdir and symlink for this recording
 mkdir -p "$PLEXSHOWDIR"
-ln -s "$MYTHFILE" "$PLEXFILEPATH"
+
+# backup file before transcoding
+mkdir -p "$BACKUP_DIR"
+cp "$MYTHFILE" "$BACKUP_DIR/$FILENAME"
+
+# transcode video to mp4
+HandBrakeCLI -i "$MYTHFILE" -o "$PLEXFILEPATH" --preset="High Profile"
+
+#remove original recording
+rm "$MYTHFILE"
+#link transcoded veresion to original 
+ln -s "$PLEXFILEPATH" "$MYTHFILE"
 
 # Prune all dead links and empty folders
-find "$PLEXLIBRARYDIR" -xtype l -delete
-find "$PLEXLIBRARYDIR" -type d -empty -delete
+#find "$PLEXLIBRARYDIR" -xtype l -delete
+#find "$PLEXLIBRARYDIR" -type d -empty -delete
 
-# Update Plex library
-curl "${PMSURL}/library/sections/${PMSSEC}/refresh"
